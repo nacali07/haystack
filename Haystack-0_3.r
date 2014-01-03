@@ -34,16 +34,19 @@ HaystackModel<-setRefClass('HaystackModel'
        , name = "character"   
        , datasets = 'list'
        , homedir = "character"   
-      ),
+       , performance = 'list'
+       ),
       methods = list(
-        saveRds = function(){
+        addDataset<-function(x,dsname){
+            datasets[[dsname]] <<- x 
+        }            
+        saveRds = function(prod=F){
             if(is.null(homedir)){
                 stop("Please set homedir before saving: e.g. x$setHomeDir('~/path')")
             }
             if (is.null(name)){
                 stop("Please set name before saving: e.g. x$setName('data76') or x$name<-'data76'")
             }
-
             newfile<-paste(homedir,"models/",name,".rds",sep="")
             if(file.exists(newfile)){
                 response<-ask(newfile,' exists. Overwrite? (y/n) > ')
@@ -87,6 +90,12 @@ HaystackModel<-setRefClass('HaystackModel'
              transform(x,name)
              score(x,name)   
          },
+         avts = function(x,dsname){ #add,validate,transform,score
+             addDataset(x,name)
+             validate(x,name)
+             transform(x,name)
+             score(x,name)   
+         },
          getpred = function(x,key=NULL,names=NULL){
              if(! x %in% names(datasets)){
                errorInvalidDataset(names(datasets))                                                                   
@@ -107,11 +116,52 @@ HaystackModel<-setRefClass('HaystackModel'
                }
             }
          },
-         viewperformance = function(){
-               
+         performance = function(pred,target,dsname,name){
+            require(ROCR)
+            # Use ROCR to do the calculations
+            pred<-prediction(
+                              datasets[[dsname]]$data[,pred]
+                            , target[[dsname]]$data[,target])
+      
+            # User ROCR to calculate the performance metrics
+            perf<-performance(pred,"tpr","fpr")
+      
+            # Use a home grown function to figure out the lift at 20% of the file
+            liftAtCutoff<-function(x,perf){max(perf@y.values[[1]][perf@x.values[[1]]<=x])}
+            lift.1<-liftAtCutoff(.2,perf)
+          
+            # Set up the plotting device
+            par(mfrow=c(1,1))
+          
+            # Relatively pretty plot supplied by ROCR
+            plot(perf,avg='threshold', spread.estimate='stddev',colorize=T)
+            abline(0,1,col="grey")
+            text(lift.1,.2,.8,col="purple")
+            newPerformance<-list(
+              timestamp = now(), pred = pred, target=target,dsname=dsname                    
+            )
+            newPerformance$plot<-recordPlot()
+            performance[[name]]<-newPerformance
          },
-         estimate        = function(){
-               model <<- estimator(formula,x=devdata,...)
+         estimate        = function(dsname){
+               model <<- estimator(formula,dsname,...)
+         },
+         exportProductionModel = function(){
+              tmp<-.self$copy()
+              tmp$y_transformer<-NULL
+              tmp$formula<-NULL
+              tmp$datasets<-list()
+              tmp$performance<-NULL
+
+              tmp$methods(list(
+                               estimate = NULL,
+                               saveRds = NULL,
+                               y_transform = NULL,
+                               getpred = NULL,
+                               performance = NULL,
+                               estimate = NULL
+                               exportProductionModel = NULL))
+              return(tmp)
          }
       ))
 
@@ -169,6 +219,7 @@ Haystack<-setRefClass('Haystack'
           , notes         = "character"
           , homedir       = "character"
           , name          = "character"
+          , key           = "character"
           , description   = "character")
       ,methods=list(
         setName = function(x){
@@ -200,6 +251,32 @@ Haystack<-setRefClass('Haystack'
         readJson = function(){
               data <<- jsonParser$execution()
               addNote("Data obtained from json")
+        },
+        printJson = function(fields='ALL'){
+            require(httr)
+            require(jsonlite)
+            if(fields=='ALL'){
+              return(toJSON(data))
+            } else if(fields=='PRED'){
+                  predFields <- data[,grep("pred_",colnames(data),value=T)]
+                  return(toJSON(data[,c(key,predFields)]))
+            } else if(!is.null(fields)){
+                  uniquerFields<-unique(c(key,fields))  
+                  return(toJSON(data[,uniqueFields]))
+            } else {
+              stop("Please enter a valid set of fields to return.")
+            }
+        },
+        insertIntoMongo = function(){ # Should we add Mongo capability and use this instead?
+        },
+        
+        exportToDb = function(con,db,version = "001"){ 
+             newTableName <- paste(db,".",name,"_",version,"_",format(now(),"%Y%m%d"),sep="")
+             if(dbExistsTable(con, newTableName)){
+                dbWriteTable(con, newTableName, data, append = T)
+             } else {
+               dbWriteTable(conn, newTableName, data) 
+             }
         },
         readDb = function(){
               data <<- query$execution()
