@@ -15,6 +15,9 @@
 ## 4. Save model and dataset to a location
 ## Bill West: 2013-12-30 <williamjwest@gmail.com>
 
+pw<-function(x,a,b){
+  return( pmax(pmin(x,b),a) - a )
+}
 
 errorInvalidDataset<-function(dsnames){
   stop(paste(
@@ -33,21 +36,22 @@ HaystackModel<-setRefClass('HaystackModel'
        , model = "ANY"
        , name = "character"   
        , datasets = 'list'
-       , homedir = "character"   
+       , homeDir = "character"   
        , performance = 'list'
        ),
       methods = list(
-        addDataset<-function(x,dsname){
+        addDataset = function(x,dsname){
             datasets[[dsname]] <<- x 
-        }            
-        saveRds = function(prod=F){
-            if(is.null(homedir)){
+         },
+                    
+         saveRds = function(){
+            if(is.null(homeDir)){
                 stop("Please set homedir before saving: e.g. x$setHomeDir('~/path')")
             }
             if (is.null(name)){
                 stop("Please set name before saving: e.g. x$setName('data76') or x$name<-'data76'")
             }
-            newfile<-paste(homedir,"models/",name,".rds",sep="")
+            newfile<-paste(homeDir,"models/",name,".rds",sep="")
             if(file.exists(newfile)){
                 response<-ask(newfile,' exists. Overwrite? (y/n) > ')
                 if(tolower(response)!='y'){
@@ -55,7 +59,7 @@ HaystackModel<-setRefClass('HaystackModel'
                 }
             }   
             saveRDS(.self,file=newfile)
-        },        
+         },        
          y_transform = function(x){
              if(! x %in% names(datasets)){
                errorInvalidDataset(names(datasets))                                 
@@ -75,7 +79,7 @@ HaystackModel<-setRefClass('HaystackModel'
                errorInvalidDataset(names(datasets))                                 
              } else {
                pname<-paste("pred_",name,sep="")
-               .self$datasets[[x]]$data[,pname] <<- scorer(.self$datasets[[x]],.self$model)
+               datasets[[x]]$data[,pname] <<- scorer(datasets[[x]],model)
              }    
          },                
          validate = function(x){
@@ -116,7 +120,7 @@ HaystackModel<-setRefClass('HaystackModel'
                }
             }
          },
-         performance = function(pred,target,dsname,name){
+         runPerformance = function(pred,target,dsname,name){
             require(ROCR)
             # Use ROCR to do the calculations
             pred<-prediction(
@@ -141,13 +145,13 @@ HaystackModel<-setRefClass('HaystackModel'
               timestamp = now(), pred = pred, target=target,dsname=dsname                    
             )
             newPerformance$plot<-recordPlot()
-            performance[[name]]<-newPerformance
+            performance[[name]] <<- newPerformance
          },
-         estimate        = function(dsname){
-               model <<- estimator(formula,dsname,...)
+         runModel        = function(dsname){
+               model <<- estimator(formula,dsname)
          },
          exportProductionModel = function(){
-              tmp<-.self$copy()
+              tmp <- .self$copy()
               tmp$y_transformer<-NULL
               tmp$formula<-NULL
               tmp$datasets<-list()
@@ -159,11 +163,12 @@ HaystackModel<-setRefClass('HaystackModel'
                                y_transform = NULL,
                                getpred = NULL,
                                performance = NULL,
-                               estimate = NULL
+                               estimate = NULL,
                                exportProductionModel = NULL))
+
               return(tmp)
-         }
-      ))
+          }
+       ))
 
 HaystackQuery<-setRefClass('HaystackQuery'
      ,fields=c(con="function",query="character",execution="function")
@@ -192,21 +197,21 @@ HaystackMySQLQuery<-setRefClass('HaystackMySQLQuery'
                           }))
 
 
-RestoreHaystack<-function(name,homedir){
+RestoreHaystack<-function(name,home){
    stopifnot(!is.null(name))
-   stopifnot(!is.null(homedir))
+   stopifnot(!is.null(home))
 
-   homedir <<- paste(gsub("\\/$","",homedir),"/",sep="")
-   filename<-paste(homedir,"datasets/",name,".rds",sep="")
+   homeDir <<- paste(gsub("\\/$","",homeDir),"/",sep="")
+   filename<-paste(homeDir,"datasets/",name,".rds",sep="")
    return(readRDS(filename))
 }
 
-RestoreHaystackModel<-function(name,homedir){
+RestoreHaystackModel<-function(name,home){
    stopifnot(!is.null(name))
-   stopifnot(!is.null(homedir))
+   stopifnot(!is.null(home))
 
-   homedir <<- paste(gsub("\\/$","",homedir),"/",sep="")
-   filename<-paste(homedir,"models/",name,".rds",sep="")
+   homeDir <<- paste(gsub("\\/$","",home),"/",sep="")
+   filename<-paste(homeDir,"models/",name,".rds",sep="")
    return(readRDS(filename))
 }
 
@@ -214,10 +219,10 @@ Haystack<-setRefClass('Haystack'
       ,fields=c(
             data          = "data.frame"  
           , query         = "ANY"    #returns data.frame
-          , jsonparser    = "function"   
-          , snapshot_date = "Date"
+          , jsonParser    = "function"   
+          , snapshotDate  = "Date"
           , notes         = "character"
-          , homedir       = "character"
+          , homeDir       = "character"
           , name          = "character"
           , key           = "character"
           , description   = "character")
@@ -226,17 +231,17 @@ Haystack<-setRefClass('Haystack'
             name <<- x
         },            
         setHomeDir = function(x){
-            homedir <<- paste(gsub("\\/$","",x),"/",sep="")
+            homeDir <<- paste(gsub("\\/$","",x),"/",sep="")
         },
         saveRds = function(){
-            if(is.null(homedir)){
+            if(is.null(homeDir)){
                 stop("Please set homedir before saving: e.g. x$setHomeDir('~/path')")
             }
             if (is.null(name)){
                 stop("Please set name before saving: e.g. x$setName('data76') or x$name<-'data76'")
             }
 
-            newfile<-paste(homedir,"datasets/",name,".rds",sep="")
+            newfile <- paste(homeDir,"datasets/",name,".rds",sep="")
             if(file.exists(newfile)){
                 response<-ask(newfile,' exists. Overwrite? (y/n) > ')
                 if(tolower(response)!='y'){
