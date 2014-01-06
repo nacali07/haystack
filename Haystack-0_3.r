@@ -14,10 +14,22 @@
 ## 3. Run all appropriate methods to do your work
 ## 4. Save model and dataset to a location
 ## Bill West: 2013-12-30 <williamjwest@gmail.com>
+cat("Haystack: 2014-01-05\n")
+require(lubridate)
 
+sourceFunctions<-function(homedir){
+  allFiles<-grep(".*\\.r",list.files(paste(homedir,"functions",sep="/"),full.names=T),value=T)
+  for(i in allFiles){
+    cat(paste("Reading ",i,"...",sep=""))
+    source(i)
+    cat("Done!\n")
+  }
+}
 pw<-function(x,a,b){
   return( pmax(pmin(x,b),a) - a )
 }
+
+
 
 errorInvalidDataset<-function(dsnames){
   stop(paste(
@@ -74,12 +86,14 @@ HaystackModel<-setRefClass('HaystackModel'
                x_transformer(.self$datasets[[x]])
              }    
          },
-         score = function(x){
-             if(! x %in% names(datasets)){
+         score = function(dsname){
+             print(names(datasets))
+             if(! dsname %in% names(datasets)){
                errorInvalidDataset(names(datasets))                                 
              } else {
                pname<-paste("pred_",name,sep="")
-               datasets[[x]]$data[,pname] <<- scorer(datasets[[x]],model)
+                datasets[[dsname]]$data[,pname] <<- 
+                 scorer(datasets[[dsname]], model)
              }    
          },                
          validate = function(x){
@@ -120,16 +134,19 @@ HaystackModel<-setRefClass('HaystackModel'
                }
             }
          },
-         runPerformance = function(pred,target,dsname,name){
+         listAvailablePreds = function(dsname){
+           grep("pred_",colnames(datasets[[dsname]]$data),value=T)
+         },
+         runPerformance = function(dsname,pred,target){
             require(ROCR)
             # Use ROCR to do the calculations
             pred<-prediction(
                               datasets[[dsname]]$data[,pred]
-                            , target[[dsname]]$data[,target])
+                            , datasets[[dsname]]$data[,target])
       
             # User ROCR to calculate the performance metrics
             perf<-performance(pred,"tpr","fpr")
-      
+            
             # Use a home grown function to figure out the lift at 20% of the file
             liftAtCutoff<-function(x,perf){max(perf@y.values[[1]][perf@x.values[[1]]<=x])}
             lift.1<-liftAtCutoff(.2,perf)
@@ -145,11 +162,14 @@ HaystackModel<-setRefClass('HaystackModel'
               timestamp = now(), pred = pred, target=target,dsname=dsname                    
             )
             newPerformance$plot<-recordPlot()
-            performance[[name]] <<- newPerformance
+            performance[[pred]] <<- newPerformance
          },
          runModel        = function(dsname){
-               model <<- estimator(formula,dsname)
+               model <<- estimator(.self$datasets[[dsname]])
          },
+         d=function(dsname,rows=NULL,cols=NULL){
+           datasets[[x]]$data[rows,cols]
+         }
          exportProductionModel = function(){
               tmp <- .self$copy()
               tmp$y_transformer<-NULL
@@ -171,13 +191,15 @@ HaystackModel<-setRefClass('HaystackModel'
        ))
 
 HaystackQuery<-setRefClass('HaystackQuery'
-     ,fields=c(con="function",query="character",execution="function")
+     ,fields=c(con="function",qry="character",execution="function")
      )
 
 HaystackJsonQuery<-setRefClass('HaystackJsonQuery'
                        ,contains="HaystackQuery"
                        ,methods=list(
-                         initialize=function(){
+                         initialize=function(...){
+                           initFields(...)
+                           callSuper(...)
                            execution <<- function(){
                              require(jsonlite)
                              require(httr)
@@ -185,17 +207,58 @@ HaystackJsonQuery<-setRefClass('HaystackJsonQuery'
                            }
                          }))
 
-HaystackMySQLQuery<-setRefClass('HaystackMySQLQuery'
-                        ,contains="HaystackQuery"
-                        ,methods=list(
-                          initialize = function(){
-                            execution <<- function(){
-                              require(RMySQL)
-                              conn<-con()
-                              dbGetQuery(conn,query)
-                            }
-                          }))
+## Provides ability to connect to a MySQL database
+## and run queries
+## call: x<-HaystackMySqlQuery$new(query="select * from x limit 1;",
+##                     user='bill',pwloc='~/pw/pw.txt',dbname='sandbox',host='localhost')
+## update the call:   x$dbname <- 'newdb'
+## update the query:  x$dbQuery  <- "select * from x limit 2;"
+## execute the query: newdata  <- x$execute()
 
+HaystackProject<-setRefClass('HaystackProject'
+                             ,fields=c(models='list',datasets='list')
+                             ,methods=list(
+                               addModel = function(x,modelname){
+                                 models[[modelname]] <<- x
+                               },
+                               addDataset = function(x,dsname){
+                                 datasets[[dsname]] <<- x
+                               }))
+
+HaystackMySqlQuery<-setRefClass('HaystackMySQLQuery'
+                        ,fields=c(
+                             user  ='character'
+                           , pwloc ='character'
+                           , dbname='character'
+                           , host  ='character'
+                           , qry   ='character'   
+                              )        
+                        ,methods=list(
+                            execute = function(conn){
+                              require(RMySQL)
+                              stopifnot(!is.null(qry))                              
+                              dbGetQuery(conn,qry)
+                            },
+                            closeCon=function(conn){dbDisconnect(conn)},
+                            con =  function(){
+                                ## example:  connection('bill','~/pw/pw.txt')
+                                ## where pwloc is a text file with db password on line 1
+                                ## make sure this file is only readable by the user
+                                ## if you have forwarded your mysql port, you can use localhost
+                                ## Note: Assumes that the mysql port is the default (3306)
+                                if(!is.null(user) && !is.null(pwloc)){
+                                  require(RMySQL)
+                                  m<-dbDriver("MySQL")
+                                  pipecon<-pipe(paste("cat",pwloc))
+                                  password<-readLines(pipecon)
+                                  close(pipecon)
+                                  conn<-dbConnect(m,user=user,password=password,host=host,dbname=dbname)
+                                  return(conn)
+                                }  else {
+                                  stop("Please enter a valid user and pwloc. See docstring for help.")
+                                }
+                            }                          
+                          ))
 
 RestoreHaystack<-function(name,home){
    stopifnot(!is.null(name))
@@ -218,7 +281,7 @@ RestoreHaystackModel<-function(name,home){
 Haystack<-setRefClass('Haystack'
       ,fields=c(
             data          = "data.frame"  
-          , query         = "ANY"    #returns data.frame
+          , dbQuery       = "ANY"    #returns data.frame
           , jsonParser    = "function"   
           , snapshotDate  = "Date"
           , notes         = "character"
@@ -284,7 +347,9 @@ Haystack<-setRefClass('Haystack'
              }
         },
         readDb = function(){
-              data <<- query$execution()
+              conn<-dbQuery$con()
+              data <<- dbQuery$execute(conn)
+              dbQuery$closeCon(conn)
               addNote("Data obtained from db.")
         },
         setJsonParser  = function(x){
@@ -292,10 +357,14 @@ Haystack<-setRefClass('Haystack'
           addNote("JSON Parser set.")
         },
         setDbQuery = function(x){
-          query <<-x$copy()
+          dbQuery <<-x$copy()
           addNote("Query Set.")
         },
         getpred = function(key=NULL,names=NULL){
+"
+Get predctions.
+Call: x$getpred(key='fileno',names='pred')
+"
           cols<-c(key,names)
           if(is.null(cols)){
             data[,grep("pred_",colnames(data),value=T)]
