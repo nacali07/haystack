@@ -1,9 +1,10 @@
 # x: Haystack Object
 y_transformer<-function(x){
-  x$data$isSetosa<-as.factor(x$data$Species=="setosa")
+  x$data$isVirginica<-as.factor(1*(x$data$Species=="virginica"))
 }
 
 # x: Haystack Object
 x_transformer<-function(x){
+  cat("No dependent variable transformations.\n")
   # No tranformations
 }

@@ -165,11 +165,11 @@ HaystackModel<-setRefClass('HaystackModel'
             performance[[pred]] <<- newPerformance
          },
          runModel        = function(dsname){
-               model <<- estimator(.self$datasets[[dsname]])
+               model <<- estimator(x=datasets[[dsname]],formula=formula)
          },
          d=function(dsname,rows=NULL,cols=NULL){
            datasets[[x]]$data[rows,cols]
-         }
+         },
          exportProductionModel = function(){
               tmp <- .self$copy()
               tmp$y_transformer<-NULL

@@ -9,6 +9,7 @@ predict.haystack.randomforest<-function(x,model){
   pred <- predict(model,newdata=x$data,type="prob")[,"1"]
   pred_adj_odds <- pred/(1-pred)*val_mean/(1-val_mean)*(1-dev_mean)/dev_mean
   pred_adj      <- pred_adj_odds/(1+pred_adj_odds)
+  pred_adj[is.nan(pred_adj)]<-1
   return(pred_adj)
 }
 predict.haystack.glm<-function(x,model){
@@ -17,5 +18,6 @@ predict.haystack.glm<-function(x,model){
   pred<-predict(model,newdata=x$data,type="response")
   pred_adj_odds <- pred/(1-pred)*val_mean/(1-val_mean)*(1-dev_mean)/dev_mean
   pred_adj      <- pred_adj_odds/(1+pred_adj_odds)
+  pred_adj[is.nan(pred_adj)]<-1
   return(pred_adj)
 }

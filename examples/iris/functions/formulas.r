@@ -1,6 +1,6 @@
-irisLogitFormula<-as.formula(
-  isSetosa ~ Petal.Width + Petal.Length
+irisLogitFormula<-formula(
+  isVirginica ~ Petal_Width + Petal_Length + Sepal_Length + Sepal_Width
 )
-irisRfFormula<-as.formula(
-  isSetosa ~ Petal.Width + Petal.Length
+irisRfFormula<-formula(
+  isVirginica ~ Petal_Width + Petal_Length + Sepal_Length + Sepal_Width
 )
