@@ -3,7 +3,7 @@
 ## are several:
 ## 1. Datasets and models are objects that can be passed by reference to
 ##    functions and methods
-## 2. Each verion of a model exists and an object which can be easily copied
+## 2. Each version of a model exists and an object which can be easily copied
 ##    into a new object and modified slightly.  
 ## This utilizes the recently developed reference classes.
 ## Im trying to design this to mimic the real life financial and econometric
