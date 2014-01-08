@@ -1,23 +1,30 @@
-## These classes are designed to improve the efficiency of modeling in R within
-## finance institutions.  The improvements these offer over my existing process
-## are several:
-## 1. Datasets and models are objects that can be passed by reference to
-##    functions and methods
-## 2. Each verion of a model exists and an object which can be easily copied
-##    into a new object and modified slightly.  
-## This utilizes the recently developed reference classes.
-## Im trying to design this to mimic the real life financial and econometric
-## modeling process.
-## 0. Create Haystack instance.  Set appropriate parameters
-## 1. Read data into the Dataset reference class (RC) object
-## 2. Create model instance, set parameters, and associate data
-## 3. Run all appropriate methods to do your work
-## 4. Save model and dataset to a location
-## Bill West: 2013-12-30 <williamjwest@gmail.com>
-cat("Haystack: 2014-01-05\n")
-require(lubridate)
+###############################################################################
+#  Copyright 2014 William J. West, Spartanburg, SC. <williamjwest@gmail.com>
+###############################################################################
+#  This program is free software: you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation, either version 3 of the License, or
+#  (at your option) any later version.
+#  
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+# 
+#  You should have received a copy of the GNU General Public License
+#  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+###############################################################################
 
-sourceFunctions<-function(homedir){
+
+cat("Haystack-0_04: 2014-01-07\n")
+cat("Loading required packages...")
+require(lubridate)
+require(jsonlite)
+require(RMySQL)
+require(httr)
+require(ROCR)
+
+sourceFunctions <- function(homedir){
   allFiles<-grep(".*\\.r",list.files(paste(homedir,"functions",sep="/"),full.names=T),value=T)
   for(i in allFiles){
     cat(paste("Reading ",i,"...",sep=""))
@@ -25,19 +32,20 @@ sourceFunctions<-function(homedir){
     cat("Done!\n")
   }
 }
-pw<-function(x,a,b){
+
+pw <- function(x,a,b){
   return( pmax(pmin(x,b),a) - a )
 }
 
 
 
-errorInvalidDataset<-function(dsnames){
+errorInvalidDataset <- function(dsnames){
   stop(paste(
     "Please specify valid data name:"
     ,dsnames))                                   
 }
 
-HaystackModel<-setRefClass('HaystackModel'
+HaystackModel <- setRefClass('HaystackModel'
      ,fields=c(
          x_transformer = "function"
        , y_transformer = "function"
